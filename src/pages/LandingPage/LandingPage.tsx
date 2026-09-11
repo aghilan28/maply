@@ -21,7 +21,11 @@ import { CategoryPills } from '../../components/ui/CategoryPills';
 import { ToastContainer, ToastMessage } from '../../components/ui/Toast';
 import { Menu, X } from 'lucide-react';
 
-export const LandingPage: React.FC = () => {
+interface LandingPageProps {
+  onBackToLanding?: () => void;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => {
   // Single Source of Truth for saved locations (persisted in localStorage via locationRepo)
   const [locations, setLocations] = useState<LocationItem[]>([]);
 
@@ -1071,6 +1075,15 @@ export const LandingPage: React.FC = () => {
 
         {/* 6. INDEPENDENT TOP-RIGHT CONTROLS (Top right, independent from details panel) */}
         <div className="fixed top-[32px] right-[28px] z-22 pointer-events-auto hidden sm:flex items-center gap-2.5 box-border shrink-0">
+          {onBackToLanding && (
+            <button
+              onClick={onBackToLanding}
+              className="liquid-pill px-4 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 cursor-pointer shadow-lg flex items-center gap-2"
+              title="Return to Landing Page"
+            >
+              <span>← Landing Page</span>
+            </button>
+          )}
           <TopRightControls
             cityName={
               selectedLocation
