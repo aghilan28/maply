@@ -19,15 +19,15 @@ import {
   Trees,
   Gem,
   Layers,
-  Loader2,
 } from 'lucide-react';
 import { LocationCategory, LocationItem } from '../../types/location';
-import { DiscoveredPlace, NormalizedPlace } from '../../types/place';
+import { DiscoveredPlace, NormalizedPlace, PlaceImage } from '../../types/place';
+import { PlaceVisual } from '../../types/visual';
 import { CATEGORIES } from '../ui/CategoryPills';
 import { placeService } from '../../services/placeService';
-import { wikimediaImageService, CanonicalLocation } from '../../services/wikimediaImageService';
 import { placeVisualResolver } from '../../services/visuals/PlaceVisualResolver';
 import { buildPlaceVisualContext } from '../../services/visuals/visualContextHelper';
+import { PlaceHeroImage, PhotoState } from './PlaceHeroImage';
 
 interface AddLocationModalProps {
   isOpen: boolean;
@@ -36,9 +36,6 @@ interface AddLocationModalProps {
   onClose: () => void;
   onSave: (locationData: Omit<LocationItem, 'id' | 'createdAt'>) => void;
 }
-
-const DEFAULT_LANDMARK_PHOTO =
-  'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?q=80&w=1200&auto=format&fit=crop';
 
 export const AddLocationModal: React.FC<AddLocationModalProps> = ({
   isOpen,
@@ -55,93 +52,52 @@ export const AddLocationModal: React.FC<AddLocationModalProps> = ({
   const [newTagInput, setNewTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
   const [notes, setNotes] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [isPhotoLoading, setIsPhotoLoading] = useState(false);
   const [showPhotoUrlInput, setShowPhotoUrlInput] = useState(false);
+  const [customPhotoUrl, setCustomPhotoUrl] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
   const [isLoadingReverseGeo, setIsLoadingReverseGeo] = useState(false);
   const [error, setError] = useState('');
 
+  // 100% Identical Visual Resolution State matching LocationDetailsPanel (Right Sidebar)
+  const [visual, setVisual] = useState<PlaceVisual | null>(null);
+  const [photo, setPhoto] = useState<PlaceImage | null>(null);
+  const [photos, setPhotos] = useState<PlaceImage[]>([]);
+  const [photoState, setPhotoState] = useState<PhotoState>('idle');
+
   const miniMapContainerRef = useRef<HTMLDivElement | null>(null);
   const miniMapRef = useRef<mapboxgl.Map | null>(null);
-  const initializedKeyRef = useRef<string>('');
+  const activeLocationKeyRef = useRef<string>('');
+  const requestIdRef = useRef<number>(0);
 
-  // Helper to resolve real place photos using Wikimedia -> PlaceVisualResolver -> Unsplash fallback
-  const fetchPlacePhoto = (normPlace: NormalizedPlace) => {
-    const pName = normPlace.name?.trim();
-    if (!pName || pName.includes('° N') || pName.includes('° S')) {
-      setIsPhotoLoading(false);
-      return;
-    }
-    setIsPhotoLoading(true);
-
-    const canonicalLoc: CanonicalLocation = {
-      id: normPlace.id || `temp-${normPlace.latitude}-${normPlace.longitude}`,
-      name: pName,
-      latitude: normPlace.latitude,
-      longitude: normPlace.longitude,
-      address: normPlace.address,
-      city: normPlace.city,
-      category: normPlace.category,
-    };
-
-    // 1. Primary lookup: Wikimedia image service (same as LocationDetailsPanel right sidebar)
-    wikimediaImageService
-      .resolveImages(canonicalLoc)
-      .then((res) => {
-        if (res && res.images && res.images.length > 0 && res.images[0].url) {
-          setImageUrl(res.images[0].url);
-        } else {
-          // 2. Secondary lookup: PlaceVisualResolver (filter out SVG icons!)
-          const ctx = buildPlaceVisualContext(normPlace);
-          placeVisualResolver
-            .resolvePlaceVisual(ctx)
-            .then((vis) => {
-              if (vis && vis.type === 'photo' && vis.url && vis.url.startsWith('http')) {
-                setImageUrl(vis.url);
-              } else {
-                // 3. Fallback: Preserve existing or use DEFAULT_LANDMARK_PHOTO
-                setImageUrl((prev) => prev || DEFAULT_LANDMARK_PHOTO);
-              }
-            })
-            .catch(() => {
-              setImageUrl((prev) => prev || DEFAULT_LANDMARK_PHOTO);
-            });
-        }
-      })
-      .catch(() => {
-        setImageUrl((prev) => prev || DEFAULT_LANDMARK_PHOTO);
-      })
-      .finally(() => {
-        setIsPhotoLoading(false);
-      });
-  };
-
-  // Run initialization strictly ONCE per unique location modal open session
+  // Run place visual resolution pipeline 100% identical to LocationDetailsPanel right sidebar
   useEffect(() => {
     if (!isOpen || !coords) {
-      initializedKeyRef.current = '';
+      setVisual(null);
+      setPhoto(null);
+      setPhotos([]);
+      setPhotoState('idle');
+      setCustomPhotoUrl('');
+      activeLocationKeyRef.current = '';
       return;
     }
 
-    const locationKey = `${coords.lat.toFixed(5)}_${coords.lng.toFixed(5)}_${initialPlace?.id || initialPlace?.name || ''}`;
-    if (initializedKeyRef.current === locationKey) {
+    const activeKey = `${coords.lat.toFixed(5)}_${coords.lng.toFixed(5)}_${initialPlace?.id || initialPlace?.name || ''}`;
+    if (activeLocationKeyRef.current === activeKey) {
       return;
     }
-    initializedKeyRef.current = locationKey;
+    activeLocationKeyRef.current = activeKey;
 
     setError('');
     setIsFavorite(false);
     setShowPhotoUrlInput(false);
+    setCustomPhotoUrl('');
 
-    let currentPlaceName = '';
-
+    // Initial Modal Reset & Reverse Geocoding
     if (initialPlace) {
       const pName =
         initialPlace.name && !initialPlace.name.includes('° N') && !initialPlace.name.includes('° S')
           ? initialPlace.name
           : '';
-      currentPlaceName = pName;
       setName(pName);
       const city = initialPlace.city || '';
       const country = initialPlace.country || '';
@@ -153,41 +109,17 @@ export const AddLocationModal: React.FC<AddLocationModalProps> = ({
           (region && pName ? `${pName}, ${region}` : pName)
       );
 
+      let initCategory: LocationCategory = 'Travel';
       if (initialPlace.category) {
         const catLower = initialPlace.category.toLowerCase();
         const matched = CATEGORIES.find(
           (c) => c.id && (c.id.toLowerCase() === catLower || catLower.includes(c.id.toLowerCase()))
         );
         if (matched?.id) {
-          setCategory(matched.id as LocationCategory);
-        } else {
-          setCategory('Travel');
+          initCategory = matched.id as LocationCategory;
         }
-      } else {
-        setCategory('Travel');
       }
-
-      if (initialPlace.photos && initialPlace.photos.length > 0) {
-        setImageUrl(initialPlace.photos[0].url);
-        setIsPhotoLoading(false);
-      } else if (pName) {
-        fetchPlacePhoto({
-          id: initialPlace.id || `temp-${coords.lat}-${coords.lng}`,
-          providerId: initialPlace.providerId,
-          mapboxId: initialPlace.mapboxId,
-          featureType: initialPlace.featureType || 'poi',
-          name: pName,
-          latitude: coords.lat,
-          longitude: coords.lng,
-          address: initialPlace.address || initialPlace.formattedAddress,
-          city: city,
-          category: initialPlace.category,
-          source: 'discovered-place',
-        });
-      } else {
-        setImageUrl(DEFAULT_LANDMARK_PHOTO);
-        setIsPhotoLoading(false);
-      }
+      setCategory(initCategory);
 
       if (pName) {
         const autoTags = pName
@@ -195,58 +127,164 @@ export const AddLocationModal: React.FC<AddLocationModalProps> = ({
           .split(/\s+/)
           .filter((w) => w.length > 3)
           .slice(0, 3);
-        setTags(autoTags.length > 0 ? autoTags : ['temple', 'culture', 'chennai']);
+        setTags(autoTags.length > 0 ? autoTags : ['location', 'place', 'maply']);
       }
     } else {
       setName('');
       setCityRegion('Chennai, India');
       setAddress('');
-      setImageUrl(DEFAULT_LANDMARK_PHOTO);
       setCategory('Travel');
-      setTags(['temple', 'culture', 'chennai']);
+      setTags(['location', 'place', 'maply']);
       setNotes('');
+
+      setIsLoadingReverseGeo(true);
+      placeService
+        .reverseGeocode(coords.lat, coords.lng)
+        .then((place) => {
+          if (place) {
+            const resolvedName = place.name || '';
+            setName((prev) => prev || resolvedName);
+            const city = place.address?.city || place.address?.district || place.address?.state || '';
+            const country = place.address?.country || '';
+            const region = city ? (country ? `${city}, ${country}` : city) : country;
+            setCityRegion((prev) => prev || region || 'Chennai, India');
+            setAddress(
+              (prev) =>
+                prev || place.formattedAddress || (region && resolvedName ? `${resolvedName}, ${region}` : resolvedName)
+            );
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setIsLoadingReverseGeo(false);
+        });
+    }
+  }, [isOpen, coords?.lat, coords?.lng, initialPlace]);
+
+  // Dedicated Live Place Visual Resolution Effect (Runs whenever typed name, category, or coords change)
+  useEffect(() => {
+    if (!isOpen || !coords) return;
+
+    const targetName = name.trim();
+    if (!targetName) {
+      setVisual(null);
+      setPhoto(null);
+      setPhotos([]);
+      setPhotoState('idle');
+      return;
     }
 
-    setIsLoadingReverseGeo(true);
-    placeService
-      .reverseGeocode(coords.lat, coords.lng)
-      .then((place) => {
-        if (place) {
-          const resolvedName = place.name || currentPlaceName;
-          setName((prev) => prev || resolvedName);
-          const city = place.address?.city || place.address?.district || place.address?.state || '';
-          const country = place.address?.country || '';
-          const region = city ? (country ? `${city}, ${country}` : city) : country;
-          setCityRegion((prev) => prev || region || 'Chennai, India');
-          setAddress(
-            (prev) =>
-              prev || place.formattedAddress || (region ? `${resolvedName}, ${region}` : resolvedName)
-          );
+    const activeKey = `${coords.lat.toFixed(4)}_${coords.lng.toFixed(4)}_${targetName.toLowerCase()}_${category}`;
+    if (activeLocationKeyRef.current === activeKey) {
+      return;
+    }
+    activeLocationKeyRef.current = activeKey;
 
-          if (place.photos && place.photos.length > 0) {
-            setImageUrl((prev) => prev || place.photos![0].url);
-            setIsPhotoLoading(false);
-          } else if (resolvedName) {
-            fetchPlacePhoto({
-              id: `temp-${coords.lat}-${coords.lng}`,
-              name: resolvedName,
-              latitude: coords.lat,
-              longitude: coords.lng,
-              address: place.formattedAddress,
-              city: city,
-              category: place.category,
-              source: 'reverse-geocode',
-            });
+    const thisRequestId = ++requestIdRef.current;
+    const controller = new AbortController();
+
+    setPhotoState('loading');
+
+    const timer = setTimeout(() => {
+      const normPlace: NormalizedPlace = {
+        id: initialPlace?.id || `temp-${coords.lat}-${coords.lng}`,
+        providerId: initialPlace?.providerId,
+        mapboxId: initialPlace?.mapboxId,
+        name: targetName,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        address: address,
+        city: cityRegion.split(',')[0]?.trim(),
+        category: category,
+        photos: initialPlace?.photos,
+        source: initialPlace?.source || 'user',
+      };
+
+      const visualContext = buildPlaceVisualContext(normPlace);
+
+      // 1. Fast Cache Check
+      const cached = placeVisualResolver.getCachedVisual(visualContext);
+      if (cached) {
+        if (requestIdRef.current !== thisRequestId) return;
+        setVisual(cached);
+        const p: PlaceImage = {
+          url: cached.url,
+          thumbnailUrl: cached.thumbnailUrl || cached.url,
+          attribution: cached.attribution,
+          alt: cached.title || targetName,
+          source: cached.source === 'wikimedia' ? 'wikipedia' : cached.source,
+          sourceTitle: cached.title,
+          sourcePageUrl: cached.sourcePageUrl,
+        };
+        setPhoto(p);
+        setPhotos(cached.gallery ? cached.gallery.map((g) => ({ ...g, source: 'wikipedia' })) : [p]);
+        setPhotoState('loaded');
+        return;
+      }
+
+      // 2. Resolve place visual (100% identical engine to right sidebar)
+      placeVisualResolver
+        .resolvePlaceVisual(visualContext, {
+          signal: controller.signal,
+          onProgressiveVisual: (progressive) => {
+            if (requestIdRef.current !== thisRequestId) return;
+            setVisual(progressive);
+            const p: PlaceImage = {
+              url: progressive.url,
+              thumbnailUrl: progressive.thumbnailUrl || progressive.url,
+              attribution: progressive.attribution,
+              alt: progressive.title || targetName,
+              source: progressive.source === 'wikimedia' ? 'wikipedia' : progressive.source,
+              sourceTitle: progressive.title,
+              sourcePageUrl: progressive.sourcePageUrl,
+            };
+            setPhoto(p);
+            setPhotos([p]);
+            setPhotoState('loaded');
+          },
+        })
+        .then((resolvedVisual) => {
+          if (requestIdRef.current !== thisRequestId) return;
+          if (resolvedVisual) {
+            setVisual(resolvedVisual);
+            const p: PlaceImage = {
+              url: resolvedVisual.url,
+              thumbnailUrl: resolvedVisual.thumbnailUrl || resolvedVisual.url,
+              attribution: resolvedVisual.attribution,
+              alt: resolvedVisual.title || targetName,
+              source: resolvedVisual.source === 'wikimedia' ? 'wikipedia' : resolvedVisual.source,
+              sourceTitle: resolvedVisual.title,
+              sourcePageUrl: resolvedVisual.sourcePageUrl,
+            };
+            setPhoto(p);
+            setPhotos(
+              resolvedVisual.gallery
+                ? resolvedVisual.gallery.map((g) => ({ ...g, source: 'wikipedia' }))
+                : [p]
+            );
+            setPhotoState('loaded');
+          } else {
+            setVisual(null);
+            setPhoto(null);
+            setPhotos([]);
+            setPhotoState('unavailable');
           }
-        }
-      })
-      .catch((err) => {
-        console.warn('Reverse geocode error in modal:', err);
-      })
-      .finally(() => {
-        setIsLoadingReverseGeo(false);
-      });
-  }, [isOpen, coords?.lat, coords?.lng, initialPlace]);
+        })
+        .catch((err) => {
+          if (err?.name === 'AbortError') return;
+          if (requestIdRef.current !== thisRequestId) return;
+          setVisual(null);
+          setPhoto(null);
+          setPhotos([]);
+          setPhotoState('unavailable');
+        });
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, name, category, coords?.lat, coords?.lng]);
 
   // Live Mapbox Map Instance for Mini Map preview card (Reuses existing map instance)
   useEffect(() => {
@@ -356,7 +394,7 @@ export const AddLocationModal: React.FC<AddLocationModalProps> = ({
       lat: coords.lat,
       lng: coords.lng,
       category,
-      imageUrl: imageUrl.trim() || DEFAULT_LANDMARK_PHOTO,
+      imageUrl: customPhotoUrl?.trim() || photo?.url || '',
       tags: formattedTags,
       notes: notes.trim(),
       isFavorite,
@@ -585,24 +623,39 @@ export const AddLocationModal: React.FC<AddLocationModalProps> = ({
 
           {/* RIGHT COLUMN: Visual Media Photo & Interactive Map Coordinates Card */}
           <div className="lg:col-span-5 flex flex-col space-y-4 justify-between">
-            {/* Top Card: Feature Photo Preview */}
-            <div className="relative w-full h-[190px] rounded-2xl overflow-hidden border border-white/15 shadow-xl bg-slate-900 group">
-              <img
-                src={imageUrl || DEFAULT_LANDMARK_PHOTO}
-                alt="Location preview"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = DEFAULT_LANDMARK_PHOTO;
+            {/* Top Card: Feature Photo Preview OR Category Logo Identity Card (100% sidebar parity) */}
+            <div className="relative w-full h-[190px] rounded-2xl overflow-hidden border border-white/15 shadow-xl bg-slate-900 group shrink-0">
+              <PlaceHeroImage
+                visual={visual}
+                photo={photo}
+                photos={photos}
+                photoState={photoState}
+                alt={name || 'Place preview'}
+                className="w-full h-full object-cover"
+                onCandidateSuccess={(cand) => {
+                  if (coords) {
+                    const normPlace: NormalizedPlace = {
+                      id: initialPlace?.id || `temp-${coords.lat}-${coords.lng}`,
+                      name: name || 'Selected Location',
+                      latitude: coords.lat,
+                      longitude: coords.lng,
+                      category,
+                      source: initialPlace?.source || 'user',
+                    };
+                    const visualContext = buildPlaceVisualContext(normPlace);
+                    placeVisualResolver.cacheVisual(visualContext, {
+                      url: cand.url,
+                      thumbnailUrl: cand.thumbnailUrl || cand.url,
+                      type: 'photo',
+                      source: cand.source === 'wikipedia' ? 'wikimedia' : (cand.source as any) || 'wikimedia',
+                      confidence: 1.0,
+                      title: cand.sourceTitle || name,
+                      attribution: cand.attribution,
+                      sourcePageUrl: cand.sourcePageUrl,
+                    });
+                  }
                 }}
-                referrerPolicy="no-referrer"
               />
-
-              {isPhotoLoading && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center gap-2 text-xs font-semibold text-blue-300">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                  <span>Fetching landmark photo...</span>
-                </div>
-              )}
 
               {/* Bottom Right Floating Button */}
               <button
@@ -615,14 +668,28 @@ export const AddLocationModal: React.FC<AddLocationModalProps> = ({
               </button>
             </div>
 
-            {/* Popover Photo URL Input */}
+            {/* Popover Custom Photo URL Input */}
             {showPhotoUrlInput && (
               <div className="p-3 rounded-2xl bg-[#050C16] border border-white/15 space-y-2 animate-in fade-in duration-150">
                 <span className="text-[10.5px] font-semibold text-slate-300">Custom Photo Link</span>
                 <input
                   type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
+                  value={customPhotoUrl}
+                  onChange={(e) => {
+                    const url = e.target.value;
+                    setCustomPhotoUrl(url);
+                    if (url.trim()) {
+                      const customP: PlaceImage = {
+                        url: url.trim(),
+                        thumbnailUrl: url.trim(),
+                        alt: name || 'Custom Photo',
+                        source: 'user',
+                      };
+                      setPhoto(customP);
+                      setPhotos([customP]);
+                      setPhotoState('loaded');
+                    }
+                  }}
                   placeholder="Paste image URL (https://...)"
                   className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/15 text-xs text-white outline-none focus:border-blue-400"
                 />

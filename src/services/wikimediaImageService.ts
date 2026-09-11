@@ -819,6 +819,30 @@ class WikimediaImageService implements PlaceImageProvider {
     const distinctPrimaryTokens = primaryTokens.filter((t) => !genericPlaceNouns.has(t));
     const distinctTitleTokens = titleTokens.filter((t) => !genericPlaceNouns.has(t));
 
+    // CRITICAL ANTI-COLLAPSE SAFEGUARD FOR GENERIC STREET / ADDRESS NAMES:
+    // If all tokens in the place name are generic place nouns / numbers (e.g. "5th Cross Street 14", "12 Main Road")
+    // and candidate is NOT an exact title match (isExactMatch === false),
+    // reject candidate to prevent random MediaWiki article matches (e.g. shop pages like "A2Z Travel").
+    if (distinctPrimaryTokens.length === 0 && !isExactMatch) {
+      logPhotoResolverDiagnostic({
+        locationId: location.id,
+        locationName: location.name,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        candidateSource: candidate.source || 'wikipedia',
+        candidatePageTitle: candidate.title,
+        candidateImageUrl: candidateImg,
+        candidateScore: 0,
+        nameSimilarity: 0,
+        contextMatch: false,
+        distance: distMeters !== null ? `${(distMeters / 1000).toFixed(2)} km` : 'N/A',
+        browserImageLoad: 'pending',
+        status: 'rejected',
+        reason: 'Generic street/address name without proper noun tokens; rejected to prevent random article matches',
+      });
+      return { confidence: 0, matchType: 'none' };
+    }
+
     // CRITICAL ANTI-COLLAPSE SAFEGUARD:
     // If both place and candidate have distinctive proper name tokens,
     // they MUST share at least one distinctive token match with high similarity,
