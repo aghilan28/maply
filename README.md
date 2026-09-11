@@ -4,6 +4,35 @@ Maply is a modern location-exploration web application built with Mapbox GL JS, 
 
 ---
 
+## 1. Prerequisites & Quick Start
+
+### Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **Mapbox Access Token**: Optional (defaults to high-res satellite raster fallback if omitted), recommended for full 3D vector satellite tiles (`pk.eyJ...`).
+
+### Installation
+```bash
+npm install
+```
+
+### Development
+Create/configure the `.env` file as documented below and provide your Mapbox token (`VITE_MAPBOX_TOKEN`).
+
+Then start the development server:
+```bash
+npm run dev
+```
+The development server starts the Maply application on `http://localhost:3000`.
+
+### Production Build
+Build the production bundle and node server artifact:
+```bash
+npm run build
+```
+
+---
+
 ## 1. Environment Variables Configuration
 
 Create a `.env` file in the root directory (or configure secrets in your deployment environment):
