@@ -49,6 +49,7 @@ interface LocationDetailsPanelProps {
   onSetAsCurrentLocation?: (place: NormalizedPlace) => void;
   isCurrentLocationCalibrated?: boolean;
   onResetLocationCalibration?: () => void;
+  onOpenAddModal?: (place: NormalizedPlace) => void;
 }
 
 type TabType = 'overview' | 'photos' | 'notes';
@@ -107,6 +108,7 @@ export const LocationDetailsPanel: React.FC<LocationDetailsPanelProps> = ({
   onSetAsCurrentLocation,
   isCurrentLocationCalibrated,
   onResetLocationCalibration,
+  onOpenAddModal,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [copiedCoords, setCopiedCoords] = useState(false);
@@ -487,6 +489,8 @@ export const LocationDetailsPanel: React.FC<LocationDetailsPanelProps> = ({
   const handleEdit = () => {
     if (isSaved && savedLocation) {
       onEditSaved(savedLocation);
+    } else if (onOpenAddModal) {
+      onOpenAddModal(activePlace);
     } else {
       onSavePlace(activePlace);
     }
@@ -875,20 +879,16 @@ export const LocationDetailsPanel: React.FC<LocationDetailsPanelProps> = ({
 
       {/* 5. PANEL-ACTION-BAR (flex-shrink: 0, ALWAYS VISIBLE, NEVER SCROLLS AWAY) */}
       <div className="panel-action-bar flex-shrink-0 pt-3 border-t border-white/10 grid grid-cols-4 gap-2 select-none mt-auto">
-        {/* Button 1: Edit / Save */}
+        {/* Button 1: Edit Location */}
         <button
           id="action-edit-btn"
           onClick={handleEdit}
-          title={isSaved ? 'Edit location' : 'Save location'}
+          title="Edit location details and save to account"
           className="h-[56px] flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-slate-200 hover:text-white transition-all active:scale-95 cursor-pointer shadow-sm"
         >
-          {isSaved ? (
-            <Pencil className="w-4 h-4 text-blue-400" />
-          ) : (
-            <Plus className="w-4 h-4 text-blue-400" />
-          )}
+          <Pencil className="w-4 h-4 text-blue-400" />
           <span className="text-[10.5px] font-medium text-slate-300">
-            {isSaved ? 'Edit' : 'Save'}
+            Edit
           </span>
         </button>
 

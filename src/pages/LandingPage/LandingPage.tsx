@@ -17,6 +17,8 @@ import { LocationDetailsPanel } from '../../components/locations/LocationDetails
 import { AddLocationModal } from '../../components/locations/AddLocationModal';
 import { EditLocationModal } from '../../components/locations/EditLocationModal';
 import { DeleteConfirmDialog } from '../../components/locations/DeleteConfirmDialog';
+import { MyPlacesModal } from '../../components/locations/MyPlacesModal';
+import { CategoriesModal } from '../../components/locations/CategoriesModal';
 import { CategoryPills } from '../../components/ui/CategoryPills';
 import { ToastContainer, ToastMessage } from '../../components/ui/Toast';
 import { Menu, X } from 'lucide-react';
@@ -60,6 +62,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
   const [addModalInitialPlace, setAddModalInitialPlace] = useState<DiscoveredPlace | null>(null);
   const [editingLocation, setEditingLocation] = useState<LocationItem | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [isMyPlacesModalOpen, setIsMyPlacesModalOpen] = useState(false);
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
 
   // Responsive Drawer state for Mobile
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -621,13 +625,39 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
     flyToCoordinates(created.lat, created.lng, 14);
   };
 
-  // 6. EDIT SAVED LOCATION
+  // 6. EDIT SAVED OR UNCREATED LOCATION FROM SIDEBAR
   const handleSaveEditLocation = async (id: string, updatedData: Partial<LocationItem>) => {
-    const updated = await locationRepo.updateLocation(id, updatedData);
-    if (updated) {
-      setLocations((prev) => prev.map((l) => (l.id === id ? updated : l)));
+    const existing = locations.find((l) => l.id === id);
+
+    if (existing) {
+      const updated = await locationRepo.updateLocation(id, updatedData);
+      if (updated) {
+        setLocations((prev) => prev.map((l) => (l.id === id ? updated : l)));
+        setEditingLocation(null);
+        showToast(`Updated "${updated.name}" successfully`, 'success');
+      }
+    } else {
+      // Unsaved place edited via EditLocationModal
+      const newLocData: Omit<LocationItem, 'id' | 'createdAt'> = {
+        name: updatedData.name || 'Selected Location',
+        address: updatedData.address || '',
+        cityRegion: updatedData.cityRegion || 'Chennai, India',
+        lat: updatedData.lat || 0,
+        lng: updatedData.lng || 0,
+        category: updatedData.category || 'Travel',
+        imageUrl: updatedData.imageUrl || '',
+        tags: updatedData.tags || ['#location'],
+        notes: updatedData.notes || '',
+        isFavorite: updatedData.isFavorite || false,
+      };
+      const created = await locationRepo.createLocation(newLocData);
+      setLocations((prev) => [created, ...prev]);
+      setSelectedLocationId(created.id);
+      setDiscoveredPlace(null);
+      setTemporaryPin(null);
       setEditingLocation(null);
-      showToast(`Updated "${updated.name}" successfully`, 'success');
+      setLatestSavedLocation(created);
+      showToast(`Saved "${created.name}" to your Maply collection!`, 'success');
     }
   };
 
@@ -1019,6 +1049,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
             isAddingMode={isAddingMode}
             activeNavTab={activeNavTab}
             setActiveNavTab={setActiveNavTab}
+            onOpenMyPlacesModal={() => setIsMyPlacesModalOpen(true)}
+            onOpenCategoriesModal={() => setIsCategoriesModalOpen(true)}
             onDeleteLocation={(id) => {
               setDeletingLocationId(id);
             }}
@@ -1172,6 +1204,44 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
             onSetAsCurrentLocation={handleSetAsCurrentLocation}
             isCurrentLocationCalibrated={isCalibrated}
             onResetLocationCalibration={handleResetLocationCalibration}
+            onOpenAddModal={(p) => {
+              // Check if place is already saved
+              const match = locations.find(
+                (l) =>
+                  (l.placeId && p.mapboxId && l.placeId === p.mapboxId) ||
+                  (l.providerId && p.providerId && l.providerId === p.providerId) ||
+                  (Math.abs(l.lat - p.latitude) < 0.0008 && Math.abs(l.lng - p.longitude) < 0.0008)
+              );
+
+              if (match) {
+                setSelectedLocationId(match.id);
+                setEditingLocation(match);
+                return;
+              }
+
+              // Open EditLocationModal directly for unsaved place
+              const tempItem: LocationItem = {
+                id: `temp-${Date.now()}`,
+                placeId: p.mapboxId || p.providerId,
+                providerId: p.providerId || p.mapboxId,
+                name: p.name || 'Selected Location',
+                address: p.address || `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`,
+                cityRegion: p.city ? `${p.city}, India` : 'Chennai, India',
+                lat: p.latitude,
+                lng: p.longitude,
+                latitude: p.latitude,
+                longitude: p.longitude,
+                category: (p.category as any) || 'Travel',
+                imageUrl: p.photos?.[0]?.url || '',
+                imageAlt: p.name,
+                tags: ['#location', '#maply'],
+                notes: '',
+                isFavorite: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+              setEditingLocation(tempItem);
+            }}
           />
         )}
 
@@ -1207,6 +1277,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
             onClose={() => setDeletingLocationId(null)}
             onCancel={() => setDeletingLocationId(null)}
             onConfirm={handleConfirmDelete}
+          />
+        )}
+
+        {isMyPlacesModalOpen && (
+          <MyPlacesModal
+            isOpen={isMyPlacesModalOpen}
+            onClose={() => setIsMyPlacesModalOpen(false)}
+            locations={locations}
+            selectedLocationId={selectedLocationId}
+            onSelectLocation={handleSelectLocation}
+            onDeleteLocation={(id) => setDeletingLocationId(id)}
+            onEditLocation={(loc) => setEditingLocation(loc)}
+            onDirectionsLocation={handleSidebarDirections}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        )}
+
+        {isCategoriesModalOpen && (
+          <CategoriesModal
+            isOpen={isCategoriesModalOpen}
+            onClose={() => setIsCategoriesModalOpen(false)}
+            locations={locations}
+            onSelectLocation={handleSelectLocation}
           />
         )}
 

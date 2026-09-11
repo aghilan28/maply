@@ -61,6 +61,8 @@ export const EditLocationModal: React.FC<EditLocationModalProps> = ({
       tags,
       notes: notes.trim(),
       imageUrl: imageUrl.trim() || location.imageUrl,
+      lat: location.lat,
+      lng: location.lng,
     });
 
     onClose();

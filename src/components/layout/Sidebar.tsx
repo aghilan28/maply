@@ -39,6 +39,8 @@ interface SidebarProps {
   isAddingMode: boolean;
   activeNavTab: string;
   setActiveNavTab: (tab: string) => void;
+  onOpenMyPlacesModal?: () => void;
+  onOpenCategoriesModal?: () => void;
   onDeleteLocation?: (id: string) => void;
   onEditLocation?: (location: LocationItem) => void;
   onDirectionsLocation?: (location: LocationItem) => void;
@@ -117,8 +119,6 @@ function SidebarItemThumbnail({ place }: { place: LocationItem }) {
     };
   }, [place.id, place.name, place.imageUrl, place.lat, place.lng, place.address, place.category]);
 
-  const catStyle = getMarkerCategoryStyle(place);
-
   if (photoUrl && !failed) {
     return (
       <img
@@ -132,16 +132,8 @@ function SidebarItemThumbnail({ place }: { place: LocationItem }) {
   }
 
   return (
-    <div
-      className="w-full h-full flex items-center justify-center backdrop-blur-md border transition-transform group-hover:scale-105"
-      style={{
-        background: `linear-gradient(135deg, ${catStyle.glassBg}, rgba(9, 17, 30, 0.95))`,
-        borderColor: catStyle.border,
-        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 12px ${catStyle.glow}`,
-        color: catStyle.iconColor,
-      }}
-    >
-      <span dangerouslySetInnerHTML={{ __html: catStyle.iconSvg }} className="shrink-0 flex items-center justify-center" />
+    <div className="w-full h-full flex items-center justify-center bg-blue-500/10 text-blue-400">
+      {getCategoryIcon(place.category)}
     </div>
   );
 }
@@ -154,6 +146,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isAddingMode,
   activeNavTab,
   setActiveNavTab,
+  onOpenMyPlacesModal,
+  onOpenCategoriesModal,
   onDeleteLocation,
   onEditLocation,
   onDirectionsLocation,
@@ -264,6 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => {
             setActiveNavTab('myplaces');
             setSelectedCategoryFilter(null);
+            onOpenMyPlacesModal?.();
           }}
           className={`w-full h-[42px] flex items-center justify-between px-3.5 rounded-[14px] text-[13.5px] font-semibold transition-all duration-200 cursor-pointer ${
             activeNavTab === 'myplaces'
@@ -281,7 +276,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveNavTab('categories')}
+          onClick={() => {
+            setActiveNavTab('categories');
+            onOpenCategoriesModal?.();
+          }}
           className={`w-full h-[42px] flex items-center gap-2.5 px-3.5 rounded-[14px] text-[13.5px] font-semibold transition-all duration-200 cursor-pointer ${
             activeNavTab === 'categories'
               ? 'bg-blue-600/30 text-white border border-blue-400/40 shadow-[0_0_15px_rgba(59,130,246,0.22)]'
@@ -514,23 +512,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {place.cityRegion || `${place.lat.toFixed(3)}, ${place.lng.toFixed(3)}`}
                         </p>
                         <div className="flex items-center gap-1 mt-1">
-                          {(() => {
-                            const catStyle = getMarkerCategoryStyle(place);
-                            return (
-                              <span
-                                className="inline-flex items-center gap-1 text-[9.5px] px-2 py-0.5 rounded-lg font-semibold border backdrop-blur-md transition-colors"
-                                style={{
-                                  background: catStyle.glassBg,
-                                  borderColor: catStyle.border,
-                                  color: catStyle.iconColor,
-                                  boxShadow: `0 0 8px ${catStyle.glow}`,
-                                }}
-                              >
-                                <span dangerouslySetInnerHTML={{ __html: catStyle.iconSvg }} className="shrink-0 flex items-center justify-center scale-90" />
-                                <span>{place.category || 'Place'}</span>
-                              </span>
-                            );
-                          })()}
+                          <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white/10 text-slate-300 font-medium border border-white/8">
+                            {getCategoryIcon(place.category)}
+                            {place.category}
+                          </span>
                         </div>
                       </div>
                     </div>
