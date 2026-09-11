@@ -1068,6 +1068,7 @@ export const LandingPage: React.FC = () => {
             weatherText="Aerial HD View"
             isDarkMode={isDarkMode}
             onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+            savedCount={locations.length}
           />
         </div>
 
