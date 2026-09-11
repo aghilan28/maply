@@ -4,6 +4,7 @@ import { LocationItem, MapStyleType } from '../../types/location';
 import { Place, DiscoveredPlace, NormalizedPlace } from '../../types/place';
 import { normalizeMapboxFeature } from '../../services/normalizeMapboxFeature';
 import { UserLocation, computeDistanceMeters } from '../../hooks/useUserLocation';
+import { getMarkerCategoryStyle, CATEGORY_STYLES } from '../../utils/categoryStyles';
 
 interface MapViewProps {
   locations: LocationItem[];
@@ -27,89 +28,7 @@ interface MapViewProps {
 // Category styling for saved locations matching the UI reference
 // Strictly uses authentic category icons (Compass for Travel, Landmark for History, Tree for Nature, etc.)
 // No category ever uses an airplane or airport-style icon for non-airport places.
-const CATEGORY_STYLES: Record<string, { bg: string; border: string; glow: string; iconSvg: string }> = {
-  Travel: {
-    bg: '#2563eb',
-    border: '#60a5fa',
-    glow: 'rgba(37, 99, 235, 0.45)',
-    // Universal Exploration & Travel Compass (distinct from airport/flight symbols)
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="white"/></svg>`
-  },
-  Work: {
-    bg: '#2563eb',
-    border: '#60a5fa',
-    glow: 'rgba(37, 99, 235, 0.45)',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11 2 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/></svg>`
-  },
-  Home: {
-    bg: '#7c3aed',
-    border: '#c084fc',
-    glow: 'rgba(124, 58, 237, 0.45)',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>`
-  },
-  Food: {
-    bg: '#e11d48',
-    border: '#fb7185',
-    glow: 'rgba(225, 29, 72, 0.45)',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>`
-  },
-  Nature: {
-    bg: '#16a34a',
-    border: '#4ade80',
-    glow: 'rgba(22, 163, 74, 0.45)',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M12 2L6 10h2.5L5 15h3.2L6.5 19h11l-1.7-4h3.2l-3.5-5H18L12 2z"/><rect x="10.5" y="19" width="3" height="3" fill="white"/></svg>`
-  },
-  History: {
-    bg: '#4f46e5',
-    border: '#818cf8',
-    glow: 'rgba(79, 70, 229, 0.45)',
-    // Architectural landmark / palace / monument icon
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 3l-8-4v6l8 4 8-4v-6l-8 4z"/></svg>`
-  },
-  Other: {
-    bg: '#475569',
-    border: '#94a3b8',
-    glow: 'rgba(71, 85, 105, 0.45)',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>`
-  }
-};
 
-/**
- * Resolves the appropriate Maply marker category styling for a saved location.
- * Ensures palaces, temples, forts, beaches, and landmarks receive proper semantic icons
- * and NEVER an airport or airplane symbol.
- */
-function getMarkerCategoryStyle(loc: LocationItem): { bg: string; border: string; glow: string; iconSvg: string } {
-  const normName = (loc.name || '').toLowerCase();
-  const tagsStr = (loc.tags || []).join(' ').toLowerCase();
-
-  // 1. Heritage, Palaces, Temples, Monuments, Forts -> History styling
-  const isLandmark =
-    /\b(palace|temple|monument|fort|castle|museum|heritage|memorial|tomb|pyramid|cathedral|basilica|shrine|ruins|tower|colosseum)\b/i.test(
-      normName
-    ) || /\b(palace|temple|monument|heritage|history)\b/i.test(tagsStr);
-
-  if (isLandmark && (!loc.category || loc.category === 'Travel' || loc.category === 'Other')) {
-    return CATEGORY_STYLES.History;
-  }
-
-  // 2. Beaches, Hills, Mountains, Lakes, Parks, Waterfalls -> Nature styling
-  const isNature =
-    /\b(beach|lake|park|hill|hills|mountain|waterfall|falls|garden|valley|forest|canyon)\b/i.test(
-      normName
-    ) || /\b(nature|beach|lake|hills)\b/i.test(tagsStr);
-
-  if (isNature && (!loc.category || loc.category === 'Travel' || loc.category === 'Other')) {
-    return CATEGORY_STYLES.Nature;
-  }
-
-  // 3. User assigned category
-  if (loc.category && CATEGORY_STYLES[loc.category]) {
-    return CATEGORY_STYLES[loc.category];
-  }
-
-  return CATEGORY_STYLES.Travel;
-}
 
 // Fallback high-resolution satellite style object for Mapbox GL JS if token is not provided or fails
 const FALLBACK_SATELLITE_STYLE: any = {
@@ -830,28 +749,29 @@ export const MapView: React.FC<MapViewProps> = ({
       el.setAttribute('data-location-id', loc.id);
 
       if (isSelected) {
-        // Clean single Maply marker badge with bottom pointer stem aligned with anchor: bottom
+        // Liquid Glass selected place marker badge with glowing stem pointer
         el.innerHTML = `
           <div class="relative flex flex-col items-center pointer-events-auto">
-            <div class="relative flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-2xl transition-transform duration-200 hover:scale-105 border"
-                 style="background: linear-gradient(135deg, ${categoryStyle.bg}, #111827); border-color: ${categoryStyle.border}; box-shadow: 0 0 16px ${categoryStyle.glow};">
-              <span class="shrink-0 text-white">${categoryStyle.iconSvg}</span>
-              <span class="text-[11px] font-bold text-white tracking-tight whitespace-nowrap">${loc.name}</span>
+            <div class="relative flex items-center gap-2 px-3 py-1.5 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-transform duration-200 hover:scale-105"
+                 style="background: linear-gradient(135deg, ${categoryStyle.glassBg}, rgba(11, 19, 36, 0.92)); border-color: ${categoryStyle.border}; box-shadow: 0 0 22px ${categoryStyle.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.35);">
+              <span class="shrink-0 flex items-center justify-center" style="color: ${categoryStyle.iconColor}; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">${categoryStyle.iconSvg}</span>
+              <span class="text-[12px] font-bold text-white tracking-tight whitespace-nowrap">${loc.name}</span>
             </div>
-            <div class="w-0.5 h-2.5" style="background-color: ${categoryStyle.border};"></div>
-            <div class="w-2.5 h-2.5 rounded-full border-2 border-slate-900 shadow-md -mt-1" style="background-color: ${categoryStyle.bg};"></div>
+            <div class="w-0.5 h-3" style="background-color: ${categoryStyle.border}; opacity: 0.9;"></div>
+            <div class="w-3 h-3 rounded-full border-2 border-slate-900 shadow-md -mt-1" style="background-color: ${categoryStyle.border}; box-shadow: 0 0 12px ${categoryStyle.glow};"></div>
           </div>
         `;
       } else {
+        // Liquid Glass unselected map marker badge
         el.innerHTML = `
           <div class="relative flex flex-col items-center pointer-events-auto group">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center shadow-lg border transition-transform duration-200 group-hover:scale-110"
-                 style="background-color: ${categoryStyle.bg}; border-color: ${categoryStyle.border}; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-              <span class="text-white">${categoryStyle.iconSvg}</span>
+            <div class="w-9 h-9 rounded-2xl flex items-center justify-center backdrop-blur-xl border transition-all duration-300 group-hover:scale-115 group-hover:-translate-y-1 shadow-2xl"
+                 style="background: linear-gradient(135deg, ${categoryStyle.glassBg}, rgba(11, 19, 36, 0.88)); border-color: ${categoryStyle.border}; box-shadow: 0 6px 20px ${categoryStyle.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.3);">
+              <span class="flex items-center justify-center" style="color: ${categoryStyle.iconColor}; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">${categoryStyle.iconSvg}</span>
             </div>
-            <div class="w-0.5 h-2" style="background-color: ${categoryStyle.border};"></div>
-            <div class="w-2 h-2 rounded-full border border-slate-900 shadow-md -mt-0.5" style="background-color: ${categoryStyle.bg};"></div>
-            <div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none px-2 py-0.5 rounded bg-black/85 backdrop-blur-md text-[10px] text-white whitespace-nowrap border border-white/10 shadow-lg">
+            <div class="w-0.5 h-2.5 transition-colors" style="background-color: ${categoryStyle.border}; opacity: 0.8;"></div>
+            <div class="w-2.5 h-2.5 rounded-full border border-slate-900 shadow-md -mt-1" style="background-color: ${categoryStyle.border}; box-shadow: 0 0 8px ${categoryStyle.glow};"></div>
+            <div class="absolute -top-8 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none px-2.5 py-1 rounded-xl bg-slate-950/90 backdrop-blur-md text-[11px] font-semibold text-white whitespace-nowrap border border-white/20 shadow-2xl">
               ${loc.name}
             </div>
           </div>
