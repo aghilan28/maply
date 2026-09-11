@@ -3,32 +3,58 @@ import { locationStorage } from './locationStorage';
 
 export class LocationRepository {
   private cache: LocationItem[] = [];
+  private activeUserId: string | null = null;
 
-  constructor() {
-    this.cache = locationStorage.load();
+  public setActiveUser(userId?: string | null) {
+    const cleanId = userId || null;
+    if (this.activeUserId !== cleanId) {
+      this.activeUserId = cleanId;
+      this.cache = locationStorage.load(this.activeUserId);
+    }
   }
 
-  async getLocations(): Promise<LocationItem[]> {
-    this.cache = locationStorage.load();
+  public getActiveUserId(): string | null {
+    return this.activeUserId;
+  }
+
+  async getLocations(userId?: string | null): Promise<LocationItem[]> {
+    if (userId !== undefined) {
+      this.activeUserId = userId || null;
+    }
+    this.cache = locationStorage.load(this.activeUserId);
     return [...this.cache];
   }
 
-  async getLocation(id: string): Promise<LocationItem | null> {
+  async getLocation(id: string, userId?: string | null): Promise<LocationItem | null> {
+    if (userId !== undefined) {
+      this.setActiveUser(userId);
+    } else {
+      this.cache = locationStorage.load(this.activeUserId);
+    }
     const loc = this.cache.find(item => item.id === id);
     return loc ? { ...loc } : null;
   }
 
-  async createLocation(item: Omit<LocationItem, 'id' | 'createdAt'> & { id?: string }): Promise<LocationItem> {
+  async createLocation(
+    item: Omit<LocationItem, 'id' | 'createdAt'> & { id?: string },
+    userId?: string | null
+  ): Promise<LocationItem> {
+    if (userId !== undefined) {
+      this.setActiveUser(userId);
+    }
     const now = new Date();
-    const dateFormatted = now.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }) + ' · ' + now.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    const dateFormatted =
+      now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }) +
+      ' · ' +
+      now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
 
     const newLocation: LocationItem = {
       ...item,
@@ -40,50 +66,66 @@ export class LocationRepository {
     };
 
     this.cache = [newLocation, ...this.cache];
-    locationStorage.save(this.cache);
+    locationStorage.save(this.cache, this.activeUserId);
     return newLocation;
   }
 
-  async updateLocation(id: string, data: Partial<LocationItem>): Promise<LocationItem | null> {
+  async updateLocation(
+    id: string,
+    data: Partial<LocationItem>,
+    userId?: string | null
+  ): Promise<LocationItem | null> {
+    if (userId !== undefined) {
+      this.setActiveUser(userId);
+    }
     const index = this.cache.findIndex(item => item.id === id);
     if (index === -1) return null;
 
     const now = new Date();
-    const dateFormatted = now.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }) + ' · ' + now.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    const dateFormatted =
+      now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }) +
+      ' · ' +
+      now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
 
     const updated: LocationItem = {
       ...this.cache[index],
       ...data,
-      updatedAt: dateFormatted
+      updatedAt: dateFormatted,
     };
 
     this.cache[index] = updated;
-    locationStorage.save(this.cache);
+    locationStorage.save(this.cache, this.activeUserId);
     return updated;
   }
 
-  async deleteLocation(id: string): Promise<boolean> {
+  async deleteLocation(id: string, userId?: string | null): Promise<boolean> {
+    if (userId !== undefined) {
+      this.setActiveUser(userId);
+    }
     const prevLen = this.cache.length;
     this.cache = this.cache.filter(item => item.id !== id);
     if (this.cache.length !== prevLen) {
-      locationStorage.save(this.cache);
+      locationStorage.save(this.cache, this.activeUserId);
       return true;
     }
     return false;
   }
 
-  async restoreLocation(location: LocationItem): Promise<void> {
+  async restoreLocation(location: LocationItem, userId?: string | null): Promise<void> {
+    if (userId !== undefined) {
+      this.setActiveUser(userId);
+    }
     if (!this.cache.some(item => item.id === location.id)) {
       this.cache = [location, ...this.cache];
-      locationStorage.save(this.cache);
+      locationStorage.save(this.cache, this.activeUserId);
     }
   }
 }

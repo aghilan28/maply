@@ -468,7 +468,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Scrollable Saved Places List with Clean Floating Actions */}
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 scrollbar-thin relative">
-            {filteredPlaces.length === 0 ? (
+            {locations.length === 0 ? (
               <div className="p-6 text-center text-slate-400 text-[11px] space-y-2.5">
                 <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
                   <MapPin className="w-4 h-4 text-blue-400" />
@@ -477,6 +477,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <p className="font-medium text-slate-200 text-[11.5px]">No saved places yet</p>
                   <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
                     Click anywhere on the map or click <span className="text-blue-400 font-semibold">"Add New Place"</span> to start pinning your locations.
+                  </p>
+                </div>
+              </div>
+            ) : filteredPlaces.length === 0 ? (
+              <div className="p-6 text-center text-slate-400 text-[11px] space-y-2.5">
+                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
+                  <Search className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-slate-200 text-[11.5px]">No matches for "{listSearch}"</p>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                    Try searching for another place name, city, or category.
                   </p>
                 </div>
               </div>
@@ -509,7 +521,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {place.name}
                         </p>
                         <p className="text-[10.5px] text-slate-400 truncate leading-tight mt-0.5">
-                          {place.cityRegion || `${place.lat.toFixed(3)}, ${place.lng.toFixed(3)}`}
+                          {place.cityRegion ? `${place.cityRegion} · ` : ''}
+                          <span className="font-mono text-[9.5px] text-slate-400/90">{place.lat.toFixed(4)}, {place.lng.toFixed(4)}</span>
                         </p>
                         <div className="flex items-center gap-1 mt-1">
                           <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white/10 text-slate-300 font-medium border border-white/8">

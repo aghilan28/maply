@@ -103,6 +103,19 @@ class AuthService {
     return { success: true, user: userSession };
   }
 
+  public loginAsGuest(guestName: string): { success: boolean; user: AuthUser } {
+    const cleanName = guestName.trim() || 'Guest Explorer';
+    const guestUser: AuthUser = {
+      id: `guest-${Date.now()}`,
+      username: cleanName.toLowerCase().replace(/\s+/g, '_'),
+      email: `${cleanName.toLowerCase().replace(/\s+/g, '_')}@guest.maply.com`,
+      name: cleanName,
+      createdAt: new Date().toISOString(),
+    };
+    this.setSession(guestUser);
+    return { success: true, user: guestUser };
+  }
+
   public getSession(): AuthUser | null {
     try {
       const sessionStr = localStorage.getItem(SESSION_STORAGE_KEY);

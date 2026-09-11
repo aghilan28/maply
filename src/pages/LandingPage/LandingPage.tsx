@@ -192,12 +192,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
     }
   }, [resetCalibration, flyToCoordinates, showToast]);
 
-  // Load saved locations from Repository on mount (clean new user start)
+  // Load saved locations from Repository scoped to current user account or guest session
   useEffect(() => {
-    locationRepo.getLocations().then((data) => {
+    const userId = currentUser?.id || currentUser?.username || 'guest_default';
+    locationRepo.setActiveUser(userId);
+    locationRepo.getLocations(userId).then((data) => {
       setLocations(data);
+      // Reset selected states when user session changes
+      setSelectedLocationId(null);
+      setDiscoveredPlace(null);
+      setTemporaryPin(null);
     });
-  }, []);
+  }, [currentUser?.id, currentUser?.username]);
 
   // Coordinated startup camera centering: executes when both map is ready and user location is available
   const bestCenteredAccuracyRef = useRef<number>(Infinity);
@@ -1070,8 +1076,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
           />
         </div>
 
-        {/* 4. INDEPENDENT TOP SEARCH (Desktop: 400px x 42px, centered in central map region) */}
-        <div className="fixed top-[45px] left-[calc(50%-16px)] -translate-x-1/2 w-[calc(100vw-88px)] sm:w-[400px] min-w-[400px] max-w-[400px] h-[42px] z-[21] pointer-events-auto flex justify-center box-border shrink-0">
+        {/* 4. INDEPENDENT TOP SEARCH (Responsive: adapts seamlessly from 320px screens up to desktop 400px) */}
+        <div className="fixed top-[16px] sm:top-[45px] left-1/2 -translate-x-1/2 w-[calc(100vw-32px)] sm:w-[400px] min-w-0 max-w-[400px] h-[42px] z-[21] pointer-events-auto flex justify-center box-border shrink-0">
           <TopSearchBar
             locations={locations}
             onSelectSavedLocation={handleSelectLocation}
@@ -1156,8 +1162,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
           />
         </div>
 
-        {/* 8. INDEPENDENT MAP CONTROLS (Positioned at right-[365px], completely to the left of the right sidebar drawer) */}
-        <div className="fixed bottom-[32px] right-[365px] z-22 pointer-events-auto">
+        {/* 8. INDEPENDENT MAP CONTROLS (Positioned at right-[365px] on desktop, right-[16px] on mobile) */}
+        <div className="fixed bottom-[32px] right-[16px] sm:right-[365px] z-22 pointer-events-auto">
           <MapControls
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
@@ -1283,10 +1289,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
         {isMyPlacesModalOpen && (
           <MyPlacesModal
             isOpen={isMyPlacesModalOpen}
-            onClose={() => setIsMyPlacesModalOpen(false)}
+            onClose={() => {
+              setIsMyPlacesModalOpen(false);
+              setActiveNavTab('explore');
+            }}
             locations={locations}
             selectedLocationId={selectedLocationId}
-            onSelectLocation={handleSelectLocation}
+            onSelectLocation={(id) => {
+              handleSelectLocation(id);
+              setIsMyPlacesModalOpen(false);
+              setActiveNavTab('explore');
+            }}
             onDeleteLocation={(id) => setDeletingLocationId(id)}
             onEditLocation={(loc) => setEditingLocation(loc)}
             onDirectionsLocation={handleSidebarDirections}
@@ -1297,9 +1310,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, curre
         {isCategoriesModalOpen && (
           <CategoriesModal
             isOpen={isCategoriesModalOpen}
-            onClose={() => setIsCategoriesModalOpen(false)}
+            onClose={() => {
+              setIsCategoriesModalOpen(false);
+              setActiveNavTab('explore');
+            }}
             locations={locations}
-            onSelectLocation={handleSelectLocation}
+            onSelectLocation={(id) => {
+              handleSelectLocation(id);
+              setIsCategoriesModalOpen(false);
+              setActiveNavTab('explore');
+            }}
           />
         )}
 

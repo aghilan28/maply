@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CloudSun, Sun, Moon, Bell, Check, Sparkles, MapPin, Calendar, LogOut } from 'lucide-react';
+import { CloudSun, Sun, Moon, Bell, X, Sparkles, MapPin, Calendar, LogOut } from 'lucide-react';
 import { AuthUser } from '../../types/authTypes';
 import { LocationItem } from '../../types/location';
 
@@ -251,29 +251,35 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
                     key={item.id}
                     className="group relative p-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-slate-300 text-[11px] leading-snug transition-all"
                   >
-                    <div className="flex items-center justify-between text-white font-medium mb-1">
-                      <div className="flex items-center gap-1.5 text-slate-100">
+                    <div className="flex items-center justify-between gap-2 text-white font-medium mb-1">
+                      <div className="flex items-center gap-1.5 text-slate-100 min-w-0 flex-1">
                         {item.icon === 'map' ? (
-                          <Sparkles className="w-3 h-3 text-cyan-400" />
+                          <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
                         ) : item.icon === 'place' ? (
-                          <MapPin className="w-3 h-3 text-blue-400" />
+                          <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
                         ) : (
-                          <CloudSun className="w-3 h-3 text-emerald-400" />
+                          <CloudSun className="w-3 h-3 text-emerald-400 shrink-0" />
                         )}
-                        <span className="truncate max-w-[150px]">{item.title}</span>
+                        <span className="truncate max-w-[130px] font-semibold">{item.title}</span>
                       </div>
-                      <span className="text-[9.5px] text-slate-400 font-mono shrink-0">
-                        {formatNotificationTime(item.timestamp)}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[9.5px] text-slate-400 font-mono">
+                          {formatNotificationTime(item.timestamp)}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDismissOne(item.id);
+                          }}
+                          className="p-0.5 text-slate-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors cursor-pointer"
+                          aria-label="Dismiss notification"
+                          title="Dismiss notification"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[10.5px] text-slate-300">{item.message}</p>
-                    <button
-                      onClick={() => handleDismissOne(item.id)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-white rounded transition-opacity cursor-pointer"
-                      aria-label="Dismiss notification"
-                    >
-                      <Check className="w-3 h-3 text-emerald-400" />
-                    </button>
                   </div>
                 ))}
               </div>
