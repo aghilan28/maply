@@ -27,6 +27,7 @@ import {
 import { LocationItem, locationItemToPlace, LocationCategory } from '../../types/location';
 import { placeImageService } from '../../services/placeImageService';
 import { wikimediaImageService, CanonicalLocation } from '../../services/wikimediaImageService';
+import { AuthUser } from '../../types/authTypes';
 import { MaplyCubeIcon } from '../ui/MaplyCubeIcon';
 
 interface SidebarProps {
@@ -44,6 +45,7 @@ interface SidebarProps {
   onToggleFavorite?: (id: string) => void;
   onCycleMapStyle?: () => void;
   currentMapStyle?: string;
+  currentUser?: AuthUser | null;
 }
 
 const getCategoryIcon = (category: string) => {
@@ -148,7 +150,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleFavorite,
   onCycleMapStyle,
   currentMapStyle = 'satellite',
+  currentUser,
 }) => {
+  const userDisplayName = currentUser?.name || currentUser?.username || 'AGHILAN M';
+  const userEmail = currentUser?.email || 'aghilan@maply.com';
+  const userInitials = userDisplayName
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase() || 'AM';
+
   const [listSearch, setListSearch] = useState('');
   const [myPlacesFilter, setMyPlacesFilter] = useState<'all' | 'favorites'>('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
@@ -621,12 +633,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="mt-auto pt-2.5 border-t border-white/10">
         <div className="flex items-center justify-between p-2 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/8 transition-colors cursor-pointer">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-white/20 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-md">
-              AR
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 via-blue-500 to-indigo-600 border border-white/20 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-md shadow-blue-500/20">
+              {userInitials}
             </div>
             <div className="min-w-0 text-left">
-              <p className="text-xs font-semibold text-white truncate leading-tight">Arjun R</p>
-              <p className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">arjun@example.com</p>
+              <p className="text-xs font-semibold text-white truncate leading-tight">{userDisplayName}</p>
+              <p className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">{userEmail}</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />

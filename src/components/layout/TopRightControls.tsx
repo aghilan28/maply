@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { CloudSun, Sun, Moon, Bell, Check, Sparkles, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CloudSun, Sun, Moon, Bell, Check, Sparkles, MapPin, Calendar, LogOut } from 'lucide-react';
+import { AuthUser } from '../../types/authTypes';
+import { LocationItem } from '../../types/location';
 
 interface NotificationItem {
   id: string;
@@ -15,6 +17,9 @@ interface TopRightControlsProps {
   onToggleTheme?: () => void;
   isDarkMode?: boolean;
   savedCount?: number;
+  currentUser?: AuthUser | null;
+  onLogout?: () => void;
+  latestSavedLocation?: LocationItem | null;
 }
 
 export const TopRightControls: React.FC<TopRightControlsProps> = ({
@@ -23,45 +28,88 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
   onToggleTheme,
   isDarkMode = false,
   savedCount = 0,
+  currentUser,
+  onLogout,
+  latestSavedLocation,
 }) => {
   const [now, setNow] = useState(() => Date.now());
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-  // Real-time tick interval to update relative timestamps live
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotificationMenu(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Live interval tick every 2 seconds to keep relative timestamps updated
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-    }, 10000);
+    }, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => [
-    {
-      id: '1',
-      title: 'Satellite HD Map Ready',
-      message: `Live aerial satellite view active for ${cityName}.`,
-      timestamp: Date.now(),
-      icon: 'map',
-    },
-    {
-      id: '2',
-      title: 'Maply Places Collection',
-      message:
-        savedCount > 0
-          ? `${savedCount} saved location(s) synced in your collection.`
-          : 'Click any place on the map to save it to your collection.',
-      timestamp: Date.now() - 2 * 60 * 1000,
-      icon: 'place',
-    },
-    {
-      id: '3',
-      title: 'Live GPS Sensor',
-      message: 'High accuracy device location tracking active.',
-      timestamp: Date.now() - 5 * 60 * 1000,
-      icon: 'gps',
-    },
-  ]);
+  // Notifications state with initial dynamic timestamps
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    const baseTime = Date.now();
+    return [
+      {
+        id: 'init-1',
+        title: 'Satellite HD Map Ready',
+        message: `Live aerial satellite view active for ${cityName}.`,
+        timestamp: baseTime - 12 * 1000, // 12 seconds ago
+        icon: 'map',
+      },
+      {
+        id: 'init-2',
+        title: 'Maply Places Collection',
+        message:
+          savedCount > 0
+            ? `${savedCount} saved location(s) synced in your collection.`
+            : 'Click any place on the map to save it to your collection.',
+        timestamp: baseTime - 140 * 1000, // 2m 20s ago
+        icon: 'place',
+      },
+      {
+        id: 'init-3',
+        title: 'Live GPS Sensor',
+        message: 'High accuracy device location tracking active.',
+        timestamp: baseTime - 450 * 1000, // 7m 30s ago
+        icon: 'gps',
+      },
+    ];
+  });
 
-  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+  // Automatically push real notification when a new location is saved
+  const prevSavedLocationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (latestSavedLocation && latestSavedLocation.id !== prevSavedLocationIdRef.current) {
+      prevSavedLocationIdRef.current = latestSavedLocation.id;
+
+      const newNotif: NotificationItem = {
+        id: `notif-${latestSavedLocation.id}-${Date.now()}`,
+        title: 'New Location Saved',
+        message: `Saved "${latestSavedLocation.name}" (${latestSavedLocation.cityRegion || 'Custom Location'}) to your places.`,
+        timestamp: Date.now(),
+        icon: 'place',
+      };
+
+      setNotifications((prev) => [newNotif, ...prev]);
+    }
+  }, [latestSavedLocation]);
+
   const unreadCount = notifications.length;
 
   const handleClearAll = () => {
@@ -72,19 +120,40 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
+  // Dynamic relative time formatter
   const formatNotificationTime = (timestamp: number): string => {
-    const diffSec = Math.max(0, Math.floor((now - timestamp) / 1000));
-    if (diffSec < 45) return 'Just now';
+    const diffMs = Math.max(0, now - timestamp);
+    const diffSec = Math.floor(diffMs / 1000);
+
+    if (diffSec < 15) return 'Just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
     const diffMin = Math.floor(diffSec / 60);
     if (diffMin < 60) return `${diffMin}m ago`;
     const diffHours = Math.floor(diffMin / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
-    return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
   };
+
+  const displayName = currentUser?.name || currentUser?.username || 'AGHILAN M';
+  const displayEmail = currentUser?.email || 'aghilan@maply.com';
+  const initials = displayName
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase() || 'AM';
+
+  const joinedDateFormatted = currentUser?.createdAt
+    ? new Date(currentUser.createdAt).toLocaleDateString('en-US', {
+        month: 'short',
+        year: 'numeric',
+      })
+    : 'Sep 2026';
 
   return (
     <div className="flex items-center gap-2.5 select-none h-[50px]">
-      {/* Weather Pill matching reference screenshot */}
+      {/* Weather Pill */}
       <div className="flex items-center gap-3 h-[42px] px-4 rounded-full liquid-glass border border-white/16 shadow-[0_10px_28px_rgba(0,0,0,0.32)] max-w-[190px]">
         <div className="flex items-center justify-center text-slate-200 shrink-0">
           <CloudSun className="w-4 h-4 text-slate-200" />
@@ -95,7 +164,7 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
         </div>
       </div>
 
-      {/* Theme Toggle Pill (Sun / Moon Switch matching reference slider) */}
+      {/* Theme Toggle Pill */}
       <div className="relative flex items-center liquid-glass border border-white/16 rounded-full p-1 shadow-[0_10px_28px_rgba(0,0,0,0.32)] hover:border-white/25 transition-all h-[42px] px-1">
         <button
           type="button"
@@ -134,11 +203,12 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
       </div>
 
       {/* Notifications Button */}
-      <div className="relative">
+      <div className="relative" ref={notifRef}>
         <button
           onClick={() => {
             setNow(Date.now());
             setShowNotificationMenu(!showNotificationMenu);
+            setShowProfileMenu(false);
           }}
           aria-label="Notifications"
           className="relative w-[42px] h-[42px] rounded-full liquid-glass border border-white/16 shadow-[0_10px_28px_rgba(0,0,0,0.32)] flex items-center justify-center text-slate-200 hover:text-white hover:border-white/25 transition-all active:scale-95 cursor-pointer"
@@ -192,14 +262,7 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
                         )}
                         <span className="truncate max-w-[150px]">{item.title}</span>
                       </div>
-                      <span
-                        className="text-[9.5px] text-slate-400 font-mono shrink-0"
-                        title={new Date(item.timestamp).toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })}
-                      >
+                      <span className="text-[9.5px] text-slate-400 font-mono shrink-0">
                         {formatNotificationTime(item.timestamp)}
                       </span>
                     </div>
@@ -224,16 +287,61 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
         )}
       </div>
 
-      {/* Profile Avatar matching reference screenshot */}
-      <div className="relative w-[42px] h-[42px] rounded-full overflow-hidden border border-white/25 shadow-xl cursor-pointer hover:scale-105 transition-transform shrink-0 ring-1 ring-white/10">
-        <img
-          src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=160&q=80"
-          alt="User Profile"
-          className="w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-        />
+      {/* Profile Avatar Button & Liquid Glass Popover */}
+      <div className="relative" ref={profileRef}>
+        <button
+          onClick={() => {
+            setShowProfileMenu(!showProfileMenu);
+            setShowNotificationMenu(false);
+          }}
+          aria-label="User Account Menu"
+          className="relative w-[42px] h-[42px] rounded-full overflow-hidden border border-white/25 shadow-xl cursor-pointer hover:scale-105 transition-transform shrink-0 ring-1 ring-white/10 block focus:outline-none"
+        >
+          <img
+            src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=160&q=80"
+            alt="User Profile Avatar"
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        </button>
+
+        {/* Liquid Glass User Profile Menu Popover */}
+        {showProfileMenu && (
+          <div className="absolute right-0 top-14 w-72 rounded-3xl bg-[#091322]/95 backdrop-blur-2xl border border-white/18 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 text-xs text-white">
+            {/* Header info */}
+            <div className="flex items-center gap-3 pb-3.5 mb-3 border-b border-white/12">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-blue-500 to-indigo-500 border border-white/20 flex items-center justify-center text-sm font-bold text-white shadow-lg shrink-0">
+                {initials}
+              </div>
+              <div className="flex flex-col text-left min-w-0">
+                <span className="text-sm font-bold text-white truncate leading-tight">{displayName}</span>
+                <span className="text-[11px] text-slate-300/90 truncate leading-tight mt-0.5">{displayEmail}</span>
+                <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-1">
+                  <Calendar className="w-3 h-3 text-blue-400" />
+                  <span>Joined {joinedDateFormatted}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions list - Only Sign Out button */}
+            <div>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onLogout();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white transition-all text-xs font-semibold cursor-pointer border border-rose-500/30"
+                >
+                  <LogOut className="w-4 h-4 text-rose-400" />
+                  <span>Sign Out</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
-

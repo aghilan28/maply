@@ -21,11 +21,15 @@ import { CategoryPills } from '../../components/ui/CategoryPills';
 import { ToastContainer, ToastMessage } from '../../components/ui/Toast';
 import { Menu, X } from 'lucide-react';
 
+import { AuthUser } from '../../types/authTypes';
+
 interface LandingPageProps {
   onBackToLanding?: () => void;
+  currentUser?: AuthUser | null;
+  onLogout?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding, currentUser, onLogout }) => {
   // Single Source of Truth for saved locations (persisted in localStorage via locationRepo)
   const [locations, setLocations] = useState<LocationItem[]>([]);
 
@@ -48,6 +52,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
   const [activeNavTab, setActiveNavTab] = useState('explore');
   const [mapStyle, setMapStyle] = useState<MapStyleType>('satellite');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [latestSavedLocation, setLatestSavedLocation] = useState<LocationItem | null>(null);
 
   // Modals & Interaction States
   const [isAddingMode, setIsAddingMode] = useState(false);
@@ -478,7 +483,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
       try {
         const place = await mapboxPlaceService.reverseLookup(lng, lat);
         if (place) {
-          setDiscoveredPlace(place);
+          const exactPlace: DiscoveredPlace = {
+            ...place,
+            latitude: lat,  // Keep exact user click latitude
+            longitude: lng, // Keep exact user click longitude
+          };
+          setDiscoveredPlace(exactPlace);
           setTemporaryPin({
             latitude: lat,
             longitude: lng,
@@ -593,6 +603,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
     setSelectedLocationId(created.id);
     setDiscoveredPlace(null);
     setTemporaryPin(null);
+    setLatestSavedLocation(created);
     showToast(`Saved "${created.name}" to your Maply collection!`, 'success');
   };
 
@@ -605,6 +616,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
     setAddModalCoords(null);
     setAddModalInitialPlace(null);
     setTemporaryPin(null);
+    setLatestSavedLocation(created);
     showToast(`Saved "${created.name}" to your places!`, 'success');
     flyToCoordinates(created.lat, created.lng, 14);
   };
@@ -1022,6 +1034,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
             onToggleFavorite={handleToggleFavorite}
             onCycleMapStyle={handleCycleMapStyle}
             currentMapStyle={mapStyle}
+            currentUser={currentUser}
           />
         </div>
 
@@ -1055,7 +1068,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
                 : 'Good Evening,'}
             </h2>
             <h1 className="font-bold text-white text-[26px] tracking-tight drop-shadow-md leading-none mb-2">
-              Arjun
+              {currentUser?.name || currentUser?.username || 'Arjun'}
             </h1>
             <p className="text-[12px] text-slate-200/90 font-medium drop-shadow mt-1">
               Explore. Save. Revisit.
@@ -1075,15 +1088,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
 
         {/* 6. INDEPENDENT TOP-RIGHT CONTROLS (Top right, independent from details panel) */}
         <div className="fixed top-[32px] right-[28px] z-22 pointer-events-auto hidden sm:flex items-center gap-2.5 box-border shrink-0">
-          {onBackToLanding && (
-            <button
-              onClick={onBackToLanding}
-              className="liquid-pill px-4 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 cursor-pointer shadow-lg flex items-center gap-2"
-              title="Return to Landing Page"
-            >
-              <span>← Landing Page</span>
-            </button>
-          )}
           <TopRightControls
             cityName={
               selectedLocation
@@ -1096,6 +1100,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onBackToLanding }) => 
             isDarkMode={isDarkMode}
             onToggleTheme={handleToggleTheme}
             savedCount={locations.length}
+            currentUser={currentUser}
+            onLogout={onLogout}
+            onBackToLanding={onBackToLanding}
+            latestSavedLocation={latestSavedLocation}
           />
         </div>
 

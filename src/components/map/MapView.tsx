@@ -830,24 +830,28 @@ export const MapView: React.FC<MapViewProps> = ({
       el.setAttribute('data-location-id', loc.id);
 
       if (isSelected) {
-        // Clean single Maply marker badge without extra circular ping/blur highlight halos
+        // Clean single Maply marker badge with bottom pointer stem aligned with anchor: bottom
         el.innerHTML = `
-          <div class="relative flex items-center justify-center">
+          <div class="relative flex flex-col items-center pointer-events-auto">
             <div class="relative flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-2xl transition-transform duration-200 hover:scale-105 border"
                  style="background: linear-gradient(135deg, ${categoryStyle.bg}, #111827); border-color: ${categoryStyle.border}; box-shadow: 0 0 16px ${categoryStyle.glow};">
               <span class="shrink-0 text-white">${categoryStyle.iconSvg}</span>
               <span class="text-[11px] font-bold text-white tracking-tight whitespace-nowrap">${loc.name}</span>
             </div>
+            <div class="w-0.5 h-2.5" style="background-color: ${categoryStyle.border};"></div>
+            <div class="w-2.5 h-2.5 rounded-full border-2 border-slate-900 shadow-md -mt-1" style="background-color: ${categoryStyle.bg};"></div>
           </div>
         `;
       } else {
         el.innerHTML = `
-          <div class="relative flex items-center justify-center group">
+          <div class="relative flex flex-col items-center pointer-events-auto group">
             <div class="w-8 h-8 rounded-full flex items-center justify-center shadow-lg border transition-transform duration-200 group-hover:scale-110"
                  style="background-color: ${categoryStyle.bg}; border-color: ${categoryStyle.border}; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
               <span class="text-white">${categoryStyle.iconSvg}</span>
             </div>
-            <div class="absolute -bottom-5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] text-white whitespace-nowrap border border-white/10 shadow-lg">
+            <div class="w-0.5 h-2" style="background-color: ${categoryStyle.border};"></div>
+            <div class="w-2 h-2 rounded-full border border-slate-900 shadow-md -mt-0.5" style="background-color: ${categoryStyle.bg};"></div>
+            <div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none px-2 py-0.5 rounded bg-black/85 backdrop-blur-md text-[10px] text-white whitespace-nowrap border border-white/10 shadow-lg">
               ${loc.name}
             </div>
           </div>
@@ -873,7 +877,7 @@ export const MapView: React.FC<MapViewProps> = ({
         bindMarkerEvents(markerEl);
       } else {
         bindMarkerEvents(el);
-        marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([loc.lng, loc.lat])
           .addTo(map);
         markersRef.current.set(loc.id, marker);
