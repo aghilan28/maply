@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CloudSun, Sun, Moon, Bell, Check, Sparkles, MapPin } from 'lucide-react';
 
 interface NotificationItem {
   id: string;
   title: string;
   message: string;
-  time: string;
+  timestamp: number;
   icon?: 'map' | 'place' | 'gps';
 }
 
@@ -21,15 +21,25 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
   cityName = 'Current Region',
   weatherText = 'Aerial HD View',
   onToggleTheme,
-  isDarkMode = true,
+  isDarkMode = false,
   savedCount = 0,
 }) => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
+  const [now, setNow] = useState(() => Date.now());
+
+  // Real-time tick interval to update relative timestamps live
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => [
     {
       id: '1',
       title: 'Satellite HD Map Ready',
       message: `Live aerial satellite view active for ${cityName}.`,
-      time: 'Just now',
+      timestamp: Date.now(),
       icon: 'map',
     },
     {
@@ -39,14 +49,14 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
         savedCount > 0
           ? `${savedCount} saved location(s) synced in your collection.`
           : 'Click any place on the map to save it to your collection.',
-      time: '1m ago',
+      timestamp: Date.now() - 2 * 60 * 1000,
       icon: 'place',
     },
     {
       id: '3',
       title: 'Live GPS Sensor',
       message: 'High accuracy device location tracking active.',
-      time: '5m ago',
+      timestamp: Date.now() - 5 * 60 * 1000,
       icon: 'gps',
     },
   ]);
@@ -60,6 +70,16 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
 
   const handleDismissOne = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const formatNotificationTime = (timestamp: number): string => {
+    const diffSec = Math.max(0, Math.floor((now - timestamp) / 1000));
+    if (diffSec < 45) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   };
 
   return (
@@ -76,35 +96,50 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
       </div>
 
       {/* Theme Toggle Pill (Sun / Moon Switch matching reference slider) */}
-      <button
-        onClick={onToggleTheme}
-        aria-label="Toggle theme mode"
-        className="relative flex items-center liquid-glass border border-white/16 rounded-full p-1 shadow-[0_10px_28px_rgba(0,0,0,0.32)] hover:border-white/25 transition-all cursor-pointer h-[42px] px-1"
-      >
-        <div
-          className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 ${
+      <div className="relative flex items-center liquid-glass border border-white/16 rounded-full p-1 shadow-[0_10px_28px_rgba(0,0,0,0.32)] hover:border-white/25 transition-all h-[42px] px-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (isDarkMode && onToggleTheme) {
+              onToggleTheme();
+            }
+          }}
+          title="Switch to Real-time Satellite View (Sun)"
+          aria-label="Switch to Real-time Satellite View"
+          className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 cursor-pointer ${
             !isDarkMode
-              ? 'bg-blue-500 text-white shadow-md shadow-blue-500/50'
+              ? 'bg-blue-500 text-white shadow-md shadow-blue-500/50 scale-105'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <Sun className="w-4 h-4" />
-        </div>
-        <div
-          className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 ${
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!isDarkMode && onToggleTheme) {
+              onToggleTheme();
+            }
+          }}
+          title="Switch to Dark Theme Map (Moon)"
+          aria-label="Switch to Dark Theme Map"
+          className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 cursor-pointer ${
             isDarkMode
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50 scale-105'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <Moon className="w-4 h-4" />
-        </div>
-      </button>
+        </button>
+      </div>
 
       {/* Notifications Button */}
       <div className="relative">
         <button
-          onClick={() => setShowNotificationMenu(!showNotificationMenu)}
+          onClick={() => {
+            setNow(Date.now());
+            setShowNotificationMenu(!showNotificationMenu);
+          }}
           aria-label="Notifications"
           className="relative w-[42px] h-[42px] rounded-full liquid-glass border border-white/16 shadow-[0_10px_28px_rgba(0,0,0,0.32)] flex items-center justify-center text-slate-200 hover:text-white hover:border-white/25 transition-all active:scale-95 cursor-pointer"
         >
@@ -155,14 +190,23 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
                         ) : (
                           <CloudSun className="w-3 h-3 text-emerald-400" />
                         )}
-                        <span className="truncate max-w-[170px]">{item.title}</span>
+                        <span className="truncate max-w-[150px]">{item.title}</span>
                       </div>
-                      <span className="text-[9.5px] text-slate-400 font-mono shrink-0">{item.time}</span>
+                      <span
+                        className="text-[9.5px] text-slate-400 font-mono shrink-0"
+                        title={new Date(item.timestamp).toLocaleTimeString([], {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        })}
+                      >
+                        {formatNotificationTime(item.timestamp)}
+                      </span>
                     </div>
                     <p className="text-[10.5px] text-slate-300">{item.message}</p>
                     <button
                       onClick={() => handleDismissOne(item.id)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-white rounded transition-opacity"
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-white rounded transition-opacity cursor-pointer"
                       aria-label="Dismiss notification"
                     >
                       <Check className="w-3 h-3 text-emerald-400" />
@@ -192,3 +236,4 @@ export const TopRightControls: React.FC<TopRightControlsProps> = ({
     </div>
   );
 };
+

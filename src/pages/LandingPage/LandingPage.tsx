@@ -43,7 +43,7 @@ export const LandingPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [activeNavTab, setActiveNavTab] = useState('explore');
   const [mapStyle, setMapStyle] = useState<MapStyleType>('satellite');
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Modals & Interaction States
   const [isAddingMode, setIsAddingMode] = useState(false);
@@ -908,11 +908,25 @@ export const LandingPage: React.FC = () => {
     showToast('Click anywhere on the map to add a new location', 'info');
   }, [discoveredPlace, temporaryPin, selectedLocation, userLocation, showToast]);
 
+  const handleToggleTheme = useCallback(() => {
+    if (mapStyle === 'dark' || isDarkMode) {
+      setMapStyle('satellite');
+      setIsDarkMode(false);
+      showToast('Switched map theme to Real-time Satellite View', 'info');
+    } else {
+      setMapStyle('dark');
+      setIsDarkMode(true);
+      showToast('Switched map theme to Dark Vector Theme', 'info');
+    }
+  }, [mapStyle, isDarkMode, showToast]);
+
   const handleCycleMapStyle = () => {
     const styles: MapStyleType[] = ['satellite', 'standard', 'dark'];
     const nextIndex = (styles.indexOf(mapStyle) + 1) % styles.length;
-    setMapStyle(styles[nextIndex]);
-    showToast(`Switched map style to ${styles[nextIndex]}`, 'info');
+    const newStyle = styles[nextIndex];
+    setMapStyle(newStyle);
+    setIsDarkMode(newStyle === 'dark');
+    showToast(`Switched map style to ${newStyle}`, 'info');
   };
 
   return (
@@ -1065,9 +1079,9 @@ export const LandingPage: React.FC = () => {
                 ? 'Current Region'
                 : 'Live Satellite'
             }
-            weatherText="Aerial HD View"
+            weatherText={isDarkMode ? 'Dark Vector View' : 'Aerial HD View'}
             isDarkMode={isDarkMode}
-            onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+            onToggleTheme={handleToggleTheme}
             savedCount={locations.length}
           />
         </div>

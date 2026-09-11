@@ -154,3 +154,30 @@
   visibility: hidden !important;
 }
 
+/* Atmospheric Cloud Float Animations */
+@keyframes cloud-float-slow {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(25px, -15px) scale(1.04);
+  }
+}
+
+@keyframes cloud-float-reverse {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-20px, 18px) scale(1.05);
+  }
+}
+
+.animate-cloud-float-slow {
+  animation: cloud-float-slow 22s ease-in-out infinite;
+}
+
+.animate-cloud-float-reverse {
+  animation: cloud-float-reverse 26s ease-in-out infinite;
+}
+
